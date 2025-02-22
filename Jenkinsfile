@@ -2,10 +2,8 @@ pipeline {
     agent any
 
     environment {
-        ANSIBLE_HOSTS = 'inventory.ini' 
-        ANSIBLE_PLAYBOOK = 'deploy.yml' 
-        SONARQUBE_PROJECT_KEY = 'guestbook'
-        SONARQUBE_URL = 'http://localhost:9000'
+        SONARQUBE_PROJECT_KEY = 'guestbook'  // Set SonarQube project key
+        SONARQUBE_URL = 'http://localhost:9000'  // SonarQube server URL
     }
 
     stages {
@@ -17,7 +15,7 @@ pipeline {
 
         stage('Static Code Analysis (SAST)') {
             steps {
-                withSonarQubeEnv('SonarQube') { // Use the configured SonarQube server in Jenkins
+                withSonarQubeEnv('SonarQube') { // Use configured SonarQube in Jenkins
                     sh """
                         sonar-scanner \
                         -Dsonar.projectKey=$SONARQUBE_PROJECT_KEY \
@@ -31,9 +29,8 @@ pipeline {
         stage('Test Docker Environment') {
             steps {
                 script {
-                    echo '🔍 Checking Docker Installation...'
-                    sh 'docker --version'
-                    sh 'docker-compose --version'
+                    sh 'docker --version'  // Check if Docker is installed
+                    sh 'docker-compose --version'  // Check if Docker Compose is installed
                 }
             }
         }
@@ -41,8 +38,10 @@ pipeline {
         stage('Run Ansible Tests') {
             steps {
                 script {
-                    echo '🔍 Running Ansible Tests...'
-                    sh 'ansible-playbook -i $ANSIBLE_HOSTS test_docker.yml'
+                    sh '''
+                    ansible --version
+                    ansible-playbook -i inventory test-playbook.yml
+                    '''
                 }
             }
         }
@@ -50,8 +49,8 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 script {
-                    echo '🚀 Deploying with Ansible...'
-                    sh 'ansible-playbook -i $ANSIBLE_HOSTS $ANSIBLE_PLAYBOOK'
+                    sh 'docker-compose down'  // Stop old containers
+                    sh 'docker-compose up -d' // Start app in detached mode
                 }
             }
         }
