@@ -1,6 +1,13 @@
 pipeline {
     agent any
 
+    environment {
+        ANSIBLE_HOSTS = 'inventory.ini' 
+        ANSIBLE_PLAYBOOK = 'deploy.yml' 
+        SONARQUBE_PROJECT_KEY = 'guestbook'
+        SONARQUBE_URL = 'http://localhost:9000'
+    }
+
     stages {
         stage('Checkout Code') {
             steps {
@@ -8,11 +15,52 @@ pipeline {
             }
         }
 
-        stage('Build and Run with Docker Compose') {
+        stage('Static Code Analysis (SAST)') {
+            steps {
+                withSonarQubeEnv('SonarQube') { // Use the configured SonarQube server in Jenkins
+                    sh """
+                        sonar-scanner \
+                        -Dsonar.projectKey=$SONARQUBE_PROJECT_KEY \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=$SONARQUBE_URL
+                    """
+                }
+            }
+        }
+
+        stage('Test Docker Environment') {
             steps {
                 script {
-                    sh 'docker-compose down'  // Stop old containers if running
-                    sh 'docker-compose up -d' // Start the app in detached mode
+                    echo '🔍 Checking Docker Installation...'
+                    sh 'docker --version'
+                    sh 'docker-compose --version'
+                }
+            }
+        }
+
+        stage('Security Scan for Docker Images') {
+            steps {
+                script {
+                    echo '🔍 Running Trivy for Image Security Scan...'
+                    sh 'trivy image guestbook:latest || echo "⚠️ Security vulnerabilities found!"'
+                }
+            }
+        }
+
+        stage('Run Ansible Tests') {
+            steps {
+                script {
+                    echo '🔍 Running Ansible Tests...'
+                    sh 'ansible-playbook -i $ANSIBLE_HOSTS test_docker.yml'
+                }
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                script {
+                    echo '🚀 Deploying with Ansible...'
+                    sh 'ansible-playbook -i $ANSIBLE_HOSTS $ANSIBLE_PLAYBOOK'
                 }
             }
         }
@@ -27,4 +75,3 @@ pipeline {
         }
     }
 }
-
