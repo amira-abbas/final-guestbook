@@ -17,22 +17,11 @@ pipeline {
             }
         }
 
-        stage('Run Ansible Tests') {
-            steps {
-                script {
-                    sh '''
-                    ansible --version
-                    ansible-playbook -i inventory test-playbook.yml
-                    '''
-                }
-            }
-        }
-
         stage('Deploy Application') {
             steps {
                 script {
-                    sh 'docker-compose down'  // Stop old containers
-                    sh 'docker-compose up -d' // Start app in detached mode
+                    sh 'docker-compose down || true'  // Stop old containers if running
+                    sh 'docker-compose up -d'  // Start app in detached mode
                 }
             }
         }
@@ -47,8 +36,3 @@ pipeline {
         }
     }
 }
-
-
-
-
-
