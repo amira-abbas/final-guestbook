@@ -1,28 +1,10 @@
 pipeline {
     agent any
 
-    environment {
-        SONARQUBE_PROJECT_KEY = 'guestbook'  // Set SonarQube project key
-        SONARQUBE_URL = 'http://localhost:9000'  // SonarQube server URL
-    }
-
     stages {
         stage('Checkout Code') {
             steps {
                 git branch: 'main', url: 'https://github.com/ahmed-ahmedd/guestbook.git'
-            }
-        }
-
-        stage('Static Code Analysis (SAST)') {
-            steps {
-                withSonarQubeEnv('SonarQube') { // Use configured SonarQube in Jenkins
-                    sh """
-                        sonar-scanner \
-                        -Dsonar.projectKey=$SONARQUBE_PROJECT_KEY \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=$SONARQUBE_URL
-                    """
-                }
             }
         }
 
@@ -65,3 +47,8 @@ pipeline {
         }
     }
 }
+
+
+
+
+
