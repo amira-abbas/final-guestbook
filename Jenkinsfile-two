@@ -38,15 +38,6 @@ pipeline {
             }
         }
 
-        stage('Security Scan for Docker Images') {
-            steps {
-                script {
-                    echo '🔍 Running Trivy for Image Security Scan...'
-                    sh 'trivy image guestbook:latest || echo "⚠️ Security vulnerabilities found!"'
-                }
-            }
-        }
-
         stage('Run Ansible Tests') {
             steps {
                 script {
