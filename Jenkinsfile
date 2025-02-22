@@ -1,18 +1,40 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKER_IMAGE = "final-guestbook"  // Set Docker image name
+    }
+
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/ahmed-ahmedd/guestbook.git'
+                script {
+                    sh 'rm -rf *'  // ⚠️ Clears workspace to avoid conflicts
+                    checkout([$class: 'GitSCM',
+                        branches: [[name: '*/main']], // Ensure correct branch
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/ahmed-ahmedd/final-guestbook.git',
+                            credentialsId: 'github-ssh-key'
+                        ]]
+                    ])
+                }
+                sh 'ls -la'  // Debug: Check if all files exist
             }
         }
 
         stage('Test Docker Environment') {
             steps {
                 script {
-                    sh 'docker --version'  // Check if Docker is installed
-                    sh 'docker-compose --version'  // Check if Docker Compose is installed
+                    sh 'docker --version'
+                    sh 'docker-compose --version'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh "docker build -t ${DOCKER_IMAGE}:latest ."
                 }
             }
         }
@@ -20,8 +42,8 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 script {
-                    sh 'docker-compose down || true'  // Stop old containers if running
-                    sh 'docker-compose up -d'  // Start app in detached mode
+                    sh 'docker-compose down || true'  // Stop running containers (ignore errors)
+                    sh 'docker-compose up -d'  // Start application
                 }
             }
         }
@@ -29,10 +51,10 @@ pipeline {
 
     post {
         success {
-            echo '🎉 Deployment Successful!'
+            echo "✅ Deployment Successful!"
         }
         failure {
-            echo '❌ Deployment Failed. Check logs!'
+            echo "❌ Deployment Failed. Check logs!"
         }
     }
 }
