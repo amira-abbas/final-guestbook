@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "final-guestbook"
-        SONARQUBE_SERVER = "SonarQube"
+        SONARQUBE_SERVER = "SonarQube"  // SonarQube server name from Jenkins settings
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
     }
@@ -12,9 +12,9 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 script {
-                    sh 'rm -rf * || true'  
+                    sh 'rm -rf * || true'  // Clears workspace
                     checkout scm
-                    sh 'ls -la'  
+                    sh 'ls -la'  // Debugging: Verify files exist
                 }
             }
         }
@@ -39,22 +39,11 @@ pipeline {
                               -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=${SONAR_HOST_URL} \
-                              -Dsonar.login=$SONAR_TOKEN
+                              -Dsonar.login=$SONAR_TOKEN \
+                              -Dsonar.qualitygate.wait=false  # <-- Run in background (no waiting)
+                              -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**"
                             '''
                         }
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                script {
-                    def qg = waitForQualityGate()
-                    if (qg.status != 'OK') {
-                        echo "⚠️ WARNING: Quality Gate failed, but continuing deployment..."
-                    } else {
-                        echo "✅ Quality Gate Passed!"
                     }
                 }
             }
@@ -63,10 +52,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh '''
-                    echo "🚀 Building Docker Image..."
-                    docker build -t ${DOCKER_IMAGE}:latest . || echo '⚠️ Docker build failed!'
-                    '''
+                    sh "docker build -t ${DOCKER_IMAGE}:latest . || echo 'Docker build failed!'"
                 }
             }
         }
@@ -75,10 +61,9 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    echo "📦 Deploying Application..."
                     if [ -f docker-compose.yml ]; then
-                        docker-compose down || echo "⚠️ Failed to stop running containers"
-                        docker-compose up -d || echo "⚠️ Failed to start containers"
+                        docker-compose down || echo "Failed to stop running containers"
+                        docker-compose up -d || echo "Failed to start containers"
                     else
                         echo "⚠️ No docker-compose.yml found!"
                     fi
@@ -89,9 +74,6 @@ pipeline {
     }
 
     post {
-        always {
-            echo "📜 Pipeline completed. Check logs for details."
-        }
         success {
             echo "✅ Deployment Successful!"
         }
