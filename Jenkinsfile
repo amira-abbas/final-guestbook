@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "final-guestbook"
-        SONARQUBE_SERVER = "SonarQube"  // SonarQube server name from Jenkins settings
+        SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
     }
@@ -12,9 +12,9 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 script {
-                    sh 'rm -rf * || true'  // Clears workspace
+                    sh 'rm -rf * || true'  
                     checkout scm
-                    sh 'ls -la'  // Debugging: Verify files exist
+                    sh 'ls -la'
                 }
             }
         }
@@ -40,7 +40,7 @@ pipeline {
                               -Dsonar.sources=. \
                               -Dsonar.host.url=${SONAR_HOST_URL} \
                               -Dsonar.login=$SONAR_TOKEN \
-                              -Dsonar.qualitygate.wait=false  # <-- Run in background (no waiting)
+                              -Dsonar.qualitygate.wait=false \
                               -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**"
                             '''
                         }
