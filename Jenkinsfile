@@ -2,9 +2,11 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "final-guestbook"  // Set Docker image name
+        DOCKER_IMAGE = "final-guestbook"  // Docker image name
         SONARQUBE_SERVER = "SonarQube"   // SonarQube server name from Jenkins settings
         SONARQUBE_PROJECT_KEY = "final-guestbook"  // Unique SonarQube project key
+        SONAR_HOST_URL = "http://16.170.182.27:9000"  // SonarQube URL
+        SONAR_TOKEN = credentials('sonarqube-token')  // SonarQube authentication token
     }
 
     stages {
@@ -41,9 +43,19 @@ pipeline {
                         sonar-scanner \
                           -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
                           -Dsonar.sources=. \
-                          -Dsonar.host.url=http://localhost:9000 \
+                          -Dsonar.host.url=${SONAR_HOST_URL} \
                           -Dsonar.login=${SONAR_TOKEN}
                         '''
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    timeout(time: 2, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
                     }
                 }
             }
