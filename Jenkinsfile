@@ -50,20 +50,25 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
-                    timeout(time: 10, unit: 'MINUTES') {
+                    timeout(time: 5, unit: 'MINUTES') {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
-                            echo "WARNING: Quality Gate failed, but continuing deployment..."
+                            echo "⚠️ WARNING: Quality Gate failed, but continuing deployment..."
+                        } else {
+                            echo "✅ Quality Gate Passed!"
                         }
                     }
                 }
             }
-        } // <-- Corrected closing brace for Quality Gate stage
+        }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . || echo 'Docker build failed!'"
+                    sh '''
+                    echo "🚀 Building Docker Image..."
+                    docker build -t ${DOCKER_IMAGE}:latest . || echo 'Docker build failed!'
+                    '''
                 }
             }
         }
@@ -72,6 +77,7 @@ pipeline {
             steps {
                 script {
                     sh '''
+                    echo "📦 Deploying Application..."
                     if [ -f docker-compose.yml ]; then
                         docker-compose down || echo "Failed to stop running containers"
                         docker-compose up -d || echo "Failed to start containers"
