@@ -3,6 +3,8 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "final-guestbook"  // Set Docker image name
+        SONARQUBE_SERVER = "SonarQube"   // SonarQube server name from Jenkins settings
+        SONARQUBE_PROJECT_KEY = "final-guestbook"  // Unique SonarQube project key
     }
 
     stages {
@@ -27,6 +29,22 @@ pipeline {
                 script {
                     sh 'docker --version'
                     sh 'docker-compose --version'
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    withSonarQubeEnv(SONARQUBE_SERVER) {
+                        sh '''
+                        sonar-scanner \
+                          -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
+                          -Dsonar.sources=. \
+                          -Dsonar.host.url=http://localhost:9000 \
+                          -Dsonar.login=${SONAR_TOKEN}
+                        '''
+                    }
                 }
             }
         }
