@@ -2,19 +2,19 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "final-guestbook"  // Docker image name
-        SONARQUBE_SERVER = "SonarQube"   // SonarQube server name from Jenkins settings
-        SONARQUBE_PROJECT_KEY = "final-guestbook"  // Unique SonarQube project key
-        SONAR_HOST_URL = "http://16.170.182.27:9000"  // SonarQube URL
+        DOCKER_IMAGE = "final-guestbook"
+        SONARQUBE_SERVER = "SonarQube"
+        SONARQUBE_PROJECT_KEY = "final-guestbook"
+        SONAR_HOST_URL = "http://16.170.182.27:9000"
     }
 
     stages {
         stage('Checkout Code') {
             steps {
                 script {
-                    sh 'rm -rf * || true'  // Clears workspace
+                    sh 'rm -rf * || true'  
                     checkout scm
-                    sh 'ls -la'  // Debug: Check if files exist
+                    sh 'ls -la'  
                 }
             }
         }
@@ -50,13 +50,11 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
-                    timeout(time: 5, unit: 'MINUTES') {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            echo "⚠️ WARNING: Quality Gate failed, but continuing deployment..."
-                        } else {
-                            echo "✅ Quality Gate Passed!"
-                        }
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        echo "⚠️ WARNING: Quality Gate failed, but continuing deployment..."
+                    } else {
+                        echo "✅ Quality Gate Passed!"
                     }
                 }
             }
@@ -67,7 +65,7 @@ pipeline {
                 script {
                     sh '''
                     echo "🚀 Building Docker Image..."
-                    docker build -t ${DOCKER_IMAGE}:latest . || echo 'Docker build failed!'
+                    docker build -t ${DOCKER_IMAGE}:latest . || echo '⚠️ Docker build failed!'
                     '''
                 }
             }
@@ -79,8 +77,8 @@ pipeline {
                     sh '''
                     echo "📦 Deploying Application..."
                     if [ -f docker-compose.yml ]; then
-                        docker-compose down || echo "Failed to stop running containers"
-                        docker-compose up -d || echo "Failed to start containers"
+                        docker-compose down || echo "⚠️ Failed to stop running containers"
+                        docker-compose up -d || echo "⚠️ Failed to start containers"
                     else
                         echo "⚠️ No docker-compose.yml found!"
                     fi
@@ -91,6 +89,9 @@ pipeline {
     }
 
     post {
+        always {
+            echo "📜 Pipeline completed. Check logs for details."
+        }
         success {
             echo "✅ Deployment Successful!"
         }
