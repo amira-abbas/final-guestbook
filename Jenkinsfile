@@ -17,7 +17,7 @@ pipeline {
                     sh '''
                     echo "Starting Cleanup..." | tee $OUTPUT_LOG
                     rm -rf * || true
-                    rm -f $OUTPUT_LOG || true  # Clears the output log file if it exists
+                    rm -f $OUTPUT_LOG || true
                     '''
                 }
             }
@@ -27,7 +27,10 @@ pipeline {
             steps {
                 script {
                     checkout scm
-                    sh 'ls -la | tee -a $OUTPUT_LOG'  # Logs output to file
+                    sh '''
+                    echo "Listing checked-out files..." | tee -a $OUTPUT_LOG
+                    ls -la | tee -a $OUTPUT_LOG
+                    '''
                 }
             }
         }
@@ -36,6 +39,7 @@ pipeline {
             steps {
                 script {
                     sh '''
+                    echo "Checking environment..." | tee -a $OUTPUT_LOG
                     docker --version | tee -a $OUTPUT_LOG || echo "Docker not installed!" | tee -a $OUTPUT_LOG
                     docker-compose --version | tee -a $OUTPUT_LOG || echo "Docker Compose not found!" | tee -a $OUTPUT_LOG
                     sonar-scanner --version | tee -a $OUTPUT_LOG || echo "SonarScanner not installed!" | tee -a $OUTPUT_LOG
