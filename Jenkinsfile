@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "final-guestbook"
-        SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
         DOCKER_HUB_USERNAME = "ahmedelshandidy"
@@ -16,7 +15,7 @@ pipeline {
                 script {
                     sh 'echo "Starting Cleanup..." > $OUTPUT_LOG'
                     sh 'rm -rf * || true'  
-                    sh 'rm -f $OUTPUT_LOG || true'  // Clears the output log file if it exists
+                    sh 'rm -f $OUTPUT_LOG || true'  
                 }
             }
         }
@@ -25,7 +24,7 @@ pipeline {
             steps {
                 script {
                     checkout scm
-                    sh 'ls -la | tee -a $OUTPUT_LOG'  // Logs output to file
+                    sh 'ls -la | tee -a $OUTPUT_LOG'
                 }
             }
         }
@@ -38,6 +37,24 @@ pipeline {
                     docker-compose --version || echo "Docker Compose not found!" | tee -a $OUTPUT_LOG
                     sonar-scanner --version || echo "SonarScanner not installed!" | tee -a $OUTPUT_LOG
                     '''
+                }
+            }
+        }
+
+        stage('Ensure SonarQube is Running') {
+            steps {
+                script {
+                    def sonarStatus = sh(script: "docker inspect -f '{{.State.Running}}' sonarqube || echo 'false'", returnStdout: true).trim()
+                    if (sonarStatus != 'true') {
+                        echo "🚀 SonarQube is not running. Starting it now..."
+                        sh '''
+                        docker start sonarqube || \
+                        docker run -d --name sonarqube --restart always -p 9000:9000 sonarqube:lts
+                        sleep 30  # Wait for SonarQube to start
+                        '''
+                    } else {
+                        echo "✅ SonarQube is already running."
+                    }
                 }
             }
         }
