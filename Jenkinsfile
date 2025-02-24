@@ -7,7 +7,6 @@ pipeline {
         SONAR_HOST_URL = "http://16.170.182.27:9000"
         DOCKER_HUB_USERNAME = "ahmedelshandidy"
         OUTPUT_LOG = "pipeline_output.log"
-        SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"  // Slack Webhook URL
     }
 
     stages {
@@ -148,21 +147,11 @@ pipeline {
         }
         success {
             echo "✅ Deployment Successful!"
-            script {
-                // Send success message to Slack
-                sh '''
-                curl -X POST --data-urlencode "payload={\"channel\": \"#jenkins\", \"text\": \"✅ Deployment Successful!\"}" "${SLACK_WEBHOOK_URL}"
-                '''
-            }
+            slackSend(channel: '#jenkins', color: 'good', message: "✅ Deployment Successful! Build: ${env.BUILD_NUMBER} - ${env.JOB_NAME}")
         }
         failure {
             echo "❌ Deployment Failed. Check logs!"
-            script {
-                // Send failure message to Slack
-                sh '''
-                curl -X POST --data-urlencode "payload={\"channel\": \"#jenkins\", \"text\": \"❌ Deployment Failed! Check logs.\"}" "${SLACK_WEBHOOK_URL}"
-                '''
-            }
+            slackSend(channel: '#jenkins', color: 'danger', message: "❌ Deployment Failed! Build: ${env.BUILD_NUMBER} - ${env.JOB_NAME}. Check logs.")
         }
     }
 }
