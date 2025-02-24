@@ -6,26 +6,16 @@ pipeline {
         SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
-        DOCKER_HUB_USERNAME = "ahmedelshandidy"
-        OUTPUT_LOG = "pipeline_output.log"
+        OUTPUT_FILE = "pipeline.log"
     }
 
     stages {
-        stage('Cleanup') {
-            steps {
-                script {
-                    sh 'echo "Starting Cleanup..." > $OUTPUT_LOG'
-                    sh 'rm -rf * || true'  
-                    sh 'rm -f $OUTPUT_LOG || true'  // Clears the output log file if it exists
-                }
-            }
-        }
-
         stage('Checkout Code') {
             steps {
                 script {
+                    sh 'rm -rf * || true'  
                     checkout scm
-                    sh 'ls -la >> $OUTPUT_LOG'  // Logs output to file
+                    sh 'ls -la > $OUTPUT_FILE'
                 }
             }
         }
@@ -33,9 +23,12 @@ pipeline {
         stage('Verify Environment') {
             steps {
                 script {
-                    sh 'docker --version || echo "Docker not installed!" >> $OUTPUT_LOG'
-                    sh 'docker-compose --version || echo "Docker Compose not found!" >> $OUTPUT_LOG'
-                    sh 'sonar-scanner --version || echo "SonarScanner not installed!" >> $OUTPUT_LOG'
+                    sh '''
+                    echo "Verifying tools..." >> $OUTPUT_FILE
+                    docker --version || echo "Docker not installed!" >> $OUTPUT_FILE
+                    docker-compose --version || echo "Docker Compose not found!" >> $OUTPUT_FILE
+                    sonar-scanner --version || echo "SonarScanner not installed!" >> $OUTPUT_FILE
+                    '''
                 }
             }
         }
@@ -45,14 +38,25 @@ pipeline {
                 script {
                     withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
                         sh '''
+                        echo "Running SonarQube analysis..." >> $OUTPUT_FILE
                         sonar-scanner \
                           -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
                           -Dsonar.sources=. \
                           -Dsonar.host.url=${SONAR_HOST_URL} \
                           -Dsonar.login=$SONAR_TOKEN \
                           -Dsonar.qualitygate.wait=true \
-                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" >> $OUTPUT_LOG
+                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" >> $OUTPUT_FILE
                         '''
+                    }
+                }
+            }
+        }
+
+        stage('Publish SonarQube Results') {
+            steps {
+                script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: false
                     }
                 }
             }
@@ -61,7 +65,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . >> $OUTPUT_LOG || echo 'Docker build failed!' >> $OUTPUT_LOG"
+                    sh "docker build -t ${DOCKER_IMAGE}:latest . >> $OUTPUT_FILE || echo 'Docker build failed!' >> $OUTPUT_FILE"
                 }
             }
         }
@@ -69,11 +73,12 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_HUB_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_TOKEN')]) {
                         sh '''
-                        echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
-                        docker tag ${DOCKER_IMAGE}:latest $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest
-                        docker push $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest >> $OUTPUT_LOG
+                        echo "Logging into Docker Hub..." >> $OUTPUT_FILE
+                        echo "$DOCKER_TOKEN" | docker login -u ahmedelshandidy --password-stdin
+                        docker tag ${DOCKER_IMAGE}:latest ahmedelshandidy/${DOCKER_IMAGE}:latest
+                        docker push ahmedelshandidy/${DOCKER_IMAGE}:latest >> $OUTPUT_FILE
                         '''
                     }
                 }
@@ -84,11 +89,12 @@ pipeline {
             steps {
                 script {
                     sh '''
+                    echo "Deploying application..." >> $OUTPUT_FILE
                     if [ -f docker-compose.yml ]; then
-                        docker-compose down || echo "Failed to stop running containers" >> $OUTPUT_LOG
-                        docker-compose up -d || echo "Failed to start containers" >> $OUTPUT_LOG
+                        docker-compose down || echo "Failed to stop running containers" >> $OUTPUT_FILE
+                        docker-compose up -d || echo "Failed to start containers" >> $OUTPUT_FILE
                     else
-                        echo "⚠️ No docker-compose.yml found!" >> $OUTPUT_LOG
+                        echo "⚠️ No docker-compose.yml found!" >> $OUTPUT_FILE
                     fi
                     '''
                 }
@@ -99,12 +105,12 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    echo "Running application tests..." >> $OUTPUT_LOG
+                    echo "Running application tests..." >> $OUTPUT_FILE
                     if [ -f tests/run-tests.sh ]; then
                         chmod +x tests/run-tests.sh
-                        ./tests/run-tests.sh >> $OUTPUT_LOG
+                        ./tests/run-tests.sh >> $OUTPUT_FILE
                     else
-                        echo "⚠️ No test script found!" >> $OUTPUT_LOG
+                        echo "⚠️ No test script found!" >> $OUTPUT_FILE
                     fi
                     '''
                 }
@@ -117,7 +123,7 @@ pipeline {
             echo "✅ Deployment Successful!"
         }
         failure {
-            echo "❌ Deployment Failed. Check logs!"
+            echo "❌ Deployment Failed. Check $OUTPUT_FILE!"
         }
     }
 }
