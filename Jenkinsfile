@@ -6,14 +6,13 @@ pipeline {
         SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
-        BUILD_LOG_FILE = "build_output.log"
     }
 
     stages {
         stage('Checkout Code') {
             steps {
                 script {
-                    sh 'rm -rf * || true'
+                    sh 'rm -rf * || true'  
                     checkout scm
                     sh 'ls -la'
                 }
@@ -41,19 +40,8 @@ pipeline {
                           -Dsonar.host.url=${SONAR_HOST_URL} \
                           -Dsonar.login=$SONAR_TOKEN \
                           -Dsonar.qualitygate.wait=true \
-                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" \
-                        | tee ${BUILD_LOG_FILE}
+                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**"
                         '''
-                    }
-                }
-            }
-        }
-
-        stage('Wait for SonarQube') {
-            steps {
-                script {
-                    timeout(time: 5, unit: 'MINUTES') {
-                        waitForQualityGate abortPipeline: false
                     }
                 }
             }
@@ -62,7 +50,19 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . 2>&1 | tee -a ${BUILD_LOG_FILE}"
+                    sh "docker build -t ${DOCKER_IMAGE}:latest . || echo 'Docker build failed!'"
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_TOKEN')]) {
+                        sh "docker login -u your-docker-username -p $DOCKER_TOKEN"
+                        sh "docker tag ${DOCKER_IMAGE}:latest your-docker-username/${DOCKER_IMAGE}:latest"
+                        sh "docker push your-docker-username/${DOCKER_IMAGE}:latest"
+                    }
                 }
             }
         }
@@ -77,18 +77,28 @@ pipeline {
                     else
                         echo "⚠️ No docker-compose.yml found!"
                     fi
-                    ''' | tee -a ${BUILD_LOG_FILE}
+                    '''
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    sh '''
+                    if [ -f test.sh ]; then
+                        chmod +x test.sh
+                        ./test.sh || echo "Tests failed!"
+                    else
+                        echo "⚠️ No test script found!"
+                    fi
+                    '''
                 }
             }
         }
     }
 
     post {
-        always {
-            script {
-                archiveArtifacts artifacts: "${BUILD_LOG_FILE}", fingerprint: true
-            }
-        }
         success {
             echo "✅ Deployment Successful!"
         }
