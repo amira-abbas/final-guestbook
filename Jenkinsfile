@@ -6,16 +6,28 @@ pipeline {
         SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
-        OUTPUT_FILE = "pipeline.log"
+        DOCKER_HUB_USERNAME = "ahmedelshandidy"
+        OUTPUT_LOG = "pipeline_output.log"
     }
 
     stages {
+        stage('Cleanup') {
+            steps {
+                script {
+                    sh '''
+                    echo "Starting Cleanup..." | tee $OUTPUT_LOG
+                    rm -rf * || true
+                    rm -f $OUTPUT_LOG || true  # Clears the output log file if it exists
+                    '''
+                }
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 script {
-                    sh 'rm -rf * || true'  
                     checkout scm
-                    sh 'ls -la > $OUTPUT_FILE'
+                    sh 'ls -la | tee -a $OUTPUT_LOG'  # Logs output to file
                 }
             }
         }
@@ -24,10 +36,9 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    echo "Verifying tools..." >> $OUTPUT_FILE
-                    docker --version || echo "Docker not installed!" >> $OUTPUT_FILE
-                    docker-compose --version || echo "Docker Compose not found!" >> $OUTPUT_FILE
-                    sonar-scanner --version || echo "SonarScanner not installed!" >> $OUTPUT_FILE
+                    docker --version | tee -a $OUTPUT_LOG || echo "Docker not installed!" | tee -a $OUTPUT_LOG
+                    docker-compose --version | tee -a $OUTPUT_LOG || echo "Docker Compose not found!" | tee -a $OUTPUT_LOG
+                    sonar-scanner --version | tee -a $OUTPUT_LOG || echo "SonarScanner not installed!" | tee -a $OUTPUT_LOG
                     '''
                 }
             }
@@ -38,25 +49,15 @@ pipeline {
                 script {
                     withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
                         sh '''
-                        echo "Running SonarQube analysis..." >> $OUTPUT_FILE
+                        echo "Starting SonarQube Analysis..." | tee -a $OUTPUT_LOG
                         sonar-scanner \
                           -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
                           -Dsonar.sources=. \
                           -Dsonar.host.url=${SONAR_HOST_URL} \
                           -Dsonar.login=$SONAR_TOKEN \
                           -Dsonar.qualitygate.wait=true \
-                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" >> $OUTPUT_FILE
+                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" | tee -a $OUTPUT_LOG
                         '''
-                    }
-                }
-            }
-        }
-
-        stage('Publish SonarQube Results') {
-            steps {
-                script {
-                    timeout(time: 5, unit: 'MINUTES') {
-                        waitForQualityGate abortPipeline: false
                     }
                 }
             }
@@ -65,7 +66,10 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . >> $OUTPUT_FILE || echo 'Docker build failed!' >> $OUTPUT_FILE"
+                    sh '''
+                    echo "Building Docker image..." | tee -a $OUTPUT_LOG
+                    docker build -t ${DOCKER_IMAGE}:latest . | tee -a $OUTPUT_LOG || echo 'Docker build failed!' | tee -a $OUTPUT_LOG
+                    '''
                 }
             }
         }
@@ -73,12 +77,12 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_HUB_TOKEN')]) {
                         sh '''
-                        echo "Logging into Docker Hub..." >> $OUTPUT_FILE
-                        echo "$DOCKER_TOKEN" | docker login -u ahmedelshandidy --password-stdin
-                        docker tag ${DOCKER_IMAGE}:latest ahmedelshandidy/${DOCKER_IMAGE}:latest
-                        docker push ahmedelshandidy/${DOCKER_IMAGE}:latest >> $OUTPUT_FILE
+                        echo "Logging into Docker Hub..." | tee -a $OUTPUT_LOG
+                        echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
+                        docker tag ${DOCKER_IMAGE}:latest $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest
+                        docker push $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest | tee -a $OUTPUT_LOG
                         '''
                     }
                 }
@@ -89,12 +93,12 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    echo "Deploying application..." >> $OUTPUT_FILE
+                    echo "Deploying Application..." | tee -a $OUTPUT_LOG
                     if [ -f docker-compose.yml ]; then
-                        docker-compose down || echo "Failed to stop running containers" >> $OUTPUT_FILE
-                        docker-compose up -d || echo "Failed to start containers" >> $OUTPUT_FILE
+                        docker-compose down | tee -a $OUTPUT_LOG || echo "Failed to stop running containers" | tee -a $OUTPUT_LOG
+                        docker-compose up -d | tee -a $OUTPUT_LOG || echo "Failed to start containers" | tee -a $OUTPUT_LOG
                     else
-                        echo "⚠️ No docker-compose.yml found!" >> $OUTPUT_FILE
+                        echo "⚠️ No docker-compose.yml found!" | tee -a $OUTPUT_LOG
                     fi
                     '''
                 }
@@ -105,12 +109,12 @@ pipeline {
             steps {
                 script {
                     sh '''
-                    echo "Running application tests..." >> $OUTPUT_FILE
+                    echo "Running application tests..." | tee -a $OUTPUT_LOG
                     if [ -f tests/run-tests.sh ]; then
                         chmod +x tests/run-tests.sh
-                        ./tests/run-tests.sh >> $OUTPUT_FILE
+                        ./tests/run-tests.sh | tee -a $OUTPUT_LOG
                     else
-                        echo "⚠️ No test script found!" >> $OUTPUT_FILE
+                        echo "⚠️ No test script found!" | tee -a $OUTPUT_LOG
                     fi
                     '''
                 }
@@ -123,7 +127,7 @@ pipeline {
             echo "✅ Deployment Successful!"
         }
         failure {
-            echo "❌ Deployment Failed. Check $OUTPUT_FILE!"
+            echo "❌ Deployment Failed. Check logs!"
         }
     }
 }
