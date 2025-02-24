@@ -2,11 +2,11 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "final-guestbook"
+        DOCKER_IMAGE = "the-final-project-guestbook-web"
+        DOCKER_HUB_USERNAME = "ahmedelshandidy"
         SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
-        DOCKER_HUB_USERNAME = "ahmedelshandidy"
         OUTPUT_LOG = "pipeline_output.log"
     }
 
@@ -15,8 +15,10 @@ pipeline {
             steps {
                 script {
                     sh 'echo "Starting Cleanup..." > $OUTPUT_LOG'
-                    sh 'rm -rf * || true'  
-                    sh 'rm -f $OUTPUT_LOG || true'  // Clears the output log file if it exists
+                    sh 'docker stop $(docker ps -q) || true'
+                    sh 'docker system prune -af || true'
+                    sh 'rm -rf * || true'
+                    sh 'rm -f $OUTPUT_LOG || true'
                 }
             }
         }
@@ -25,7 +27,7 @@ pipeline {
             steps {
                 script {
                     checkout scm
-                    sh 'ls -la | tee -a $OUTPUT_LOG'  // Logs output to file
+                    sh 'ls -la | tee -a $OUTPUT_LOG'
                 }
             }
         }
@@ -92,32 +94,11 @@ pipeline {
             }
         }
 
-        stage('Deploy Application') {
+        stage('Deploy with Ansible') {
             steps {
                 script {
                     sh '''
-                    if [ -f docker-compose.yml ]; then
-                        docker-compose down || echo "Failed to stop running containers" | tee -a $OUTPUT_LOG
-                        docker-compose up -d || echo "Failed to start containers" | tee -a $OUTPUT_LOG
-                    else
-                        echo "⚠️ No docker-compose.yml found!" | tee -a $OUTPUT_LOG
-                    fi
-                    '''
-                }
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                script {
-                    sh '''
-                    echo "Running application tests..." | tee -a $OUTPUT_LOG
-                    if [ -f tests/run-tests.sh ]; then
-                        chmod +x tests/run-tests.sh
-                        ./tests/run-tests.sh | tee -a $OUTPUT_LOG
-                    else
-                        echo "⚠️ No test script found!" | tee -a $OUTPUT_LOG
-                    fi
+                    ansible-playbook -i inventory deploy_final_project.yml | tee -a $OUTPUT_LOG
                     '''
                 }
             }
