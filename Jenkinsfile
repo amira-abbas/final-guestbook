@@ -3,40 +3,121 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "final-guestbook"
+        SONARQUBE_SERVER = "SonarQube"
+        SONARQUBE_PROJECT_KEY = "final-guestbook"
+        SONAR_HOST_URL = "http://16.170.182.27:9000"
         DOCKER_HUB_USERNAME = "ahmedelshandidy"
         OUTPUT_LOG = "pipeline_output.log"
     }
 
     stages {
-        stage('Checkout Code') {
+        stage('Cleanup') {
             steps {
                 script {
-                    checkout scm
-                    sh 'ls -la >> $OUTPUT_LOG'
+                    sh 'echo "Starting Cleanup..." > $OUTPUT_LOG'
+                    sh 'rm -rf * || true'  
+                    sh 'rm -f $OUTPUT_LOG || true'  // Clears the output log file if it exists
                 }
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage('Checkout Code') {
             steps {
                 script {
-                    withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_HUB_TOKEN')]) {
+                    checkout scm
+                    sh 'ls -la | tee -a $OUTPUT_LOG'  // Logs output to file
+                }
+            }
+        }
+
+        stage('Verify Environment') {
+            steps {
+                script {
+                    sh '''
+                    docker --version || echo "Docker not installed!" | tee -a $OUTPUT_LOG
+                    docker-compose --version || echo "Docker Compose not found!" | tee -a $OUTPUT_LOG
+                    sonar-scanner --version || echo "SonarScanner not installed!" | tee -a $OUTPUT_LOG
+                    '''
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
                         sh '''
-                        docker build -t ${DOCKER_IMAGE}:latest .
-                        echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
-                        docker tag ${DOCKER_IMAGE}:latest $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest
-                        docker push $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest
+                        sonar-scanner \
+                          -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
+                          -Dsonar.sources=. \
+                          -Dsonar.host.url=${SONAR_HOST_URL} \
+                          -Dsonar.login=$SONAR_TOKEN \
+                          -Dsonar.qualitygate.wait=true \
+                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" \
+                          | tee -a $OUTPUT_LOG
                         '''
                     }
                 }
             }
         }
 
-        stage('Deploy with Ansible') {
+        stage('Publish SonarQube Report') {
+            steps {
+                script {
+                    sh 'cp .scannerwork/report-task.txt sonar-report.log || echo "No SonarQube report found!" | tee -a $OUTPUT_LOG'
+                }
+                archiveArtifacts artifacts: 'sonar-report.log', fingerprint: true
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh "docker build -t ${DOCKER_IMAGE}:latest . | tee -a $OUTPUT_LOG || echo 'Docker build failed!' | tee -a $OUTPUT_LOG"
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_HUB_TOKEN')]) {
+                        sh '''
+                        echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
+                        docker tag ${DOCKER_IMAGE}:latest $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest
+                        docker push $DOCKER_HUB_USERNAME/${DOCKER_IMAGE}:latest | tee -a $OUTPUT_LOG
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Application') {
             steps {
                 script {
                     sh '''
-                    ansible-playbook -i inventory deploy_final_project.yml -e "project_path=$WORKSPACE" >> $OUTPUT_LOG || echo "❌ Ansible deployment failed!" >> $OUTPUT_LOG
+                    if [ -f docker-compose.yml ]; then
+                        docker-compose down || echo "Failed to stop running containers" | tee -a $OUTPUT_LOG
+                        docker-compose up -d || echo "Failed to start containers" | tee -a $OUTPUT_LOG
+                    else
+                        echo "⚠️ No docker-compose.yml found!" | tee -a $OUTPUT_LOG
+                    fi
+                    '''
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    sh '''
+                    echo "Running application tests..." | tee -a $OUTPUT_LOG
+                    if [ -f tests/run-tests.sh ]; then
+                        chmod +x tests/run-tests.sh
+                        ./tests/run-tests.sh | tee -a $OUTPUT_LOG
+                    else
+                        echo "⚠️ No test script found!" | tee -a $OUTPUT_LOG
+                    fi
                     '''
                 }
             }
@@ -44,6 +125,9 @@ pipeline {
     }
 
     post {
+        always {
+            archiveArtifacts artifacts: 'pipeline_output.log', fingerprint: true
+        }
         success {
             echo "✅ Deployment Successful!"
         }
