@@ -6,6 +6,7 @@ pipeline {
         SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
+        BUILD_LOG_FILE = "build_output.log"
     }
 
     stages {
@@ -50,7 +51,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . || echo 'Docker build failed!'"
+                    sh "docker build -t ${DOCKER_IMAGE}:latest . > ${BUILD_LOG_FILE} 2>&1 || echo 'Docker build failed!'"
                 }
             }
         }
@@ -60,11 +61,24 @@ pipeline {
                 script {
                     sh '''
                     if [ -f docker-compose.yml ]; then
-                        docker-compose down || echo "Failed to stop running containers"
-                        docker-compose up -d || echo "Failed to start containers"
+                        docker-compose down || echo "Failed to stop running containers" >> ${BUILD_LOG_FILE}
+                        docker-compose up -d || echo "Failed to start containers" >> ${BUILD_LOG_FILE}
                     else
-                        echo "⚠️ No docker-compose.yml found!"
+                        echo "⚠️ No docker-compose.yml found!" >> ${BUILD_LOG_FILE}
                     fi
+                    '''
+                }
+            }
+        }
+
+        stage('Ensure Jenkins and Project Containers Auto-Start') {
+            steps {
+                script {
+                    sh '''
+                    echo "Ensuring Jenkins container restarts on boot..."
+                    docker update --restart always jenkins || echo "Failed to update Jenkins container"
+                    echo "Ensuring project containers restart on boot..."
+                    docker update --restart always $(docker ps -q) || echo "Failed to update project containers"
                     '''
                 }
             }
