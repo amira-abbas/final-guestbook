@@ -6,7 +6,7 @@ pipeline {
         SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
-        LOG_FILE = "build_output.log"  // Define log file name
+        BUILD_LOG_FILE = "build_output.log"
     }
 
     stages {
@@ -15,7 +15,7 @@ pipeline {
                 script {
                     sh 'rm -rf * || true'
                     checkout scm
-                    sh 'ls -la | tee -a ${LOG_FILE}'
+                    sh 'ls -la'
                 }
             }
         }
@@ -23,11 +23,9 @@ pipeline {
         stage('Verify Environment') {
             steps {
                 script {
-                    sh '''
-                    docker --version | tee -a ${LOG_FILE} || echo "Docker not installed!" | tee -a ${LOG_FILE}
-                    docker-compose --version | tee -a ${LOG_FILE} || echo "Docker Compose not found!" | tee -a ${LOG_FILE}
-                    sonar-scanner --version | tee -a ${LOG_FILE} || echo "SonarScanner not installed!" | tee -a ${LOG_FILE}
-                    '''
+                    sh 'docker --version || echo "Docker not installed!"'
+                    sh 'docker-compose --version || echo "Docker Compose not found!"'
+                    sh 'sonar-scanner --version || echo "SonarScanner not installed!"'
                 }
             }
         }
@@ -44,8 +42,18 @@ pipeline {
                           -Dsonar.login=$SONAR_TOKEN \
                           -Dsonar.qualitygate.wait=true \
                           -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" \
-                        | tee -a ${LOG_FILE}
+                        | tee ${BUILD_LOG_FILE}
                         '''
+                    }
+                }
+            }
+        }
+
+        stage('Wait for SonarQube') {
+            steps {
+                script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: false
                     }
                 }
             }
@@ -54,7 +62,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . | tee -a ${LOG_FILE}"
+                    sh "docker build -t ${DOCKER_IMAGE}:latest . 2>&1 | tee -a ${BUILD_LOG_FILE}"
                 }
             }
         }
@@ -64,12 +72,12 @@ pipeline {
                 script {
                     sh '''
                     if [ -f docker-compose.yml ]; then
-                        docker-compose down | tee -a ${LOG_FILE} || echo "Failed to stop running containers" | tee -a ${LOG_FILE}
-                        docker-compose up -d | tee -a ${LOG_FILE} || echo "Failed to start containers" | tee -a ${LOG_FILE}
+                        docker-compose down || echo "Failed to stop running containers"
+                        docker-compose up -d || echo "Failed to start containers"
                     else
-                        echo "⚠️ No docker-compose.yml found!" | tee -a ${LOG_FILE}
+                        echo "⚠️ No docker-compose.yml found!"
                     fi
-                    '''
+                    ''' | tee -a ${BUILD_LOG_FILE}
                 }
             }
         }
@@ -78,10 +86,8 @@ pipeline {
     post {
         always {
             script {
-                echo "📄 Build output log:"
-                sh "cat ${LOG_FILE}"
+                archiveArtifacts artifacts: "${BUILD_LOG_FILE}", fingerprint: true
             }
-            archiveArtifacts artifacts: 'build_output.log', fingerprint: true
         }
         success {
             echo "✅ Deployment Successful!"
