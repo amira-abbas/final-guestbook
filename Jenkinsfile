@@ -1,26 +1,4 @@
 pipeline {
-    agent any
-
-    environment {
-        DOCKER_IMAGE = "final-guestbook"
-        SONARQUBE_SERVER = "SonarQube"
-        SONARQUBE_PROJECT_KEY = "final-guestbook"
-        SONAR_HOST_URL = "http://16.170.182.27:9000"
-    }
-
-    stages {
-        stage('Checkout Code') {
-            steps {
-                script {
-                    sh 'rm -rf * || true'  
-                    checkout scm
-                    sh 'ls -la'
-                }
-            }
-        }
-
-        stage('Verify Environment') {
-            steps {
                 script {
                     sh 'docker --version || echo "Docker not installed!"'
                     sh 'docker-compose --version || echo "Docker Compose not found!"'
