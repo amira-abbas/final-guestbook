@@ -1,24 +1,52 @@
 ---
-version: "3.9"
-services:
-  web:
-    build: .
-    ports:
-      - "5000:5000"
-    depends_on:
-      - db
-    env_file:
-      - .env
-    deploy:
-      restart_policy:
-        condition: on-failure
-  db:
-    image: postgres:14-alpine
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=guestbook
-volumes:
-  postgres_data:
+- name: Ensure Deployment of Final Guestbook
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install required packages
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - docker.io
+        - docker-compose
+
+    - name: Set repo path dynamically
+      set_fact:
+        project_path: "/home/ubuntu/final-project"  # Update this based on where Jenkins clones it
+
+    - name: Clone the repository (if not exists)
+      git:
+        repo: "https://github.com/ahmedelshandidy/final-project.git"
+        dest: "{{ project_path }}"
+        version: main  # Update branch if needed
+      ignore_errors: yes  # If Jenkins already cloned, skip
+
+    - name: Pull latest Docker image
+      command: docker pull ahmedelshandidy/final-guestbook:latest
+      register: pull_result
+
+    - name: Stop running container
+      command: docker-compose down
+      args:
+        chdir: "{{ project_path }}"
+      ignore_errors: yes
+
+    - name: Start container with Docker Compose
+      command: docker-compose up -d
+      args:
+        chdir: "{{ project_path }}"
+
+    - name: Check if the application is running
+      uri:
+        url: "http://localhost:5000"  # Change to your service URL
+        status_code: 200
+      register: app_status
+      retries: 5
+      delay: 5
+      until: app_status.status == 200
+
+    - name: Confirm deployment
+      debug:
+        msg: "🚀 Deployment successful!"
