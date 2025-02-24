@@ -10,13 +10,18 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toggle-bootstrap.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toggle-bootstrap-dark.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/toggle-bootstrap-print.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
 </head>
 
 <body class="bootstrap">
     <header class="sticky-top">
         <nav class="navbar navbar-expand-lg border-bottom shadow-sm mb-4 bg-light">
-            <a class="navbar-brand h1" href="/">Guestbook</a></a>
+
+            <a class="navbar-brand h1" href="/">
+                <i class="fas fa-book"></i> Guestbook
+            </a>
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
           </button>
