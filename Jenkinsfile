@@ -87,10 +87,21 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Remove Old Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . | tee -a $OUTPUT_LOG || echo 'Docker build failed!' | tee -a $OUTPUT_LOG"
+                    sh '''
+                    echo "Removing old Docker images..." | tee -a $OUTPUT_LOG
+                    docker rmi $(docker images | grep ${DOCKER_IMAGE} | awk '{print $3}') || echo "No old images found." | tee -a $OUTPUT_LOG
+                    '''
+                }
+            }
+        }
+
+        stage('Build Docker Image (No Cache)') {
+            steps {
+                script {
+                    sh "docker build --no-cache -t ${DOCKER_IMAGE}:latest . | tee -a $OUTPUT_LOG || echo 'Docker build failed!' | tee -a $OUTPUT_LOG"
                 }
             }
         }
@@ -114,14 +125,9 @@ pipeline {
                 script {
                     sh '''
                     if [ -f docker-compose.yml ]; then
-                        echo "🛑 Stopping and removing old containers..." | tee -a $OUTPUT_LOG
+                        docker-compose pull || echo "Failed to pull latest image" | tee -a $OUTPUT_LOG
                         docker-compose down || echo "Failed to stop running containers" | tee -a $OUTPUT_LOG
-
-                        echo "🔥 Removing old Docker images for ${DOCKER_IMAGE}..." | tee -a $OUTPUT_LOG
-                        docker images -q ${DOCKER_IMAGE} | xargs -r docker rmi -f || echo "Failed to remove old images" | tee -a $OUTPUT_LOG
-
-                        echo "🚀 Starting new deployment..." | tee -a $OUTPUT_LOG
-                        docker-compose up -d || echo "Failed to start containers" | tee -a $OUTPUT_LOG
+                        docker-compose up -d --force-recreate --no-deps || echo "Failed to start containers" | tee -a $OUTPUT_LOG
                     else
                         echo "⚠️ No docker-compose.yml found!" | tee -a $OUTPUT_LOG
                     fi
