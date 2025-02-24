@@ -1,0 +1,46 @@
+---
+- name: Deploy Final Project
+  hosts: all
+  become: yes
+
+  vars:
+    project_name: "the-final-project-guestbook-web"
+    docker_image: "ahmedelshandidy/final-guestbook:latest"
+    exposed_port: "5000:5000"
+
+  tasks:
+    - name: Install required dependencies
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+        state: present
+        update_cache: yes
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Remove old Docker containers
+      shell: |
+        docker rm -f $(docker ps -aq) || true
+      ignore_errors: yes
+
+    - name: Remove old Docker images
+      shell: |
+        docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "{{ project_name }}" | xargs -r docker rmi -f
+      ignore_errors: yes
+
+    - name: Pull the latest Docker image
+      shell: |
+        docker pull {{ docker_image }}
+
+    - name: Run the final project container
+      shell: |
+        docker run -d --name {{ project_name }} -p {{ exposed_port }} {{ docker_image }}
+
+    - name: Ensure Jenkins container is running
+      shell: |
+        docker start jenkins || docker run -d --name jenkins -p 8080:8080 -v /var/jenkins_home jenkins/jenkins:lts
