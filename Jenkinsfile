@@ -1,4 +1,9 @@
 pipeline {
+    agent any
+
+    stages {
+        stage('Check Dependencies') {
+            steps {
                 script {
                     sh 'docker --version || echo "Docker not installed!"'
                     sh 'docker-compose --version || echo "Docker Compose not found!"'
@@ -10,7 +15,7 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    withSonarQubeEnv(SONARQUBE_SERVER) {
+                    withSonarQubeEnv('SONARQUBE_SERVER') {
                         withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
                             sh '''
                             sonar-scanner \
