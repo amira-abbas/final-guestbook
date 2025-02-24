@@ -1,46 +1,30 @@
 ---
-- name: Deploy Final Project
-  hosts: all
+- name: Deploy The Final Project
+  hosts: localhost
   become: yes
-
-  vars:
-    project_name: "the-final-project-guestbook-web"
-    docker_image: "ahmedelshandidy/final-guestbook:latest"
-    exposed_port: "5000:5000"
-
   tasks:
-    - name: Install required dependencies
-      apt:
-        name:
-          - docker.io
-          - docker-compose
-        state: present
-        update_cache: yes
 
-    - name: Ensure Docker service is running
+    - name: Start Docker Service
       service:
         name: docker
         state: started
         enabled: yes
 
-    - name: Remove old Docker containers
+    - name: Ensure Jenkins is Running
       shell: |
-        docker rm -f $(docker ps -aq) || true
-      ignore_errors: yes
+        docker ps | grep jenkins || docker run -d --name jenkins --restart=always -p 9090:8080 -v jenkins_home:/var/jenkins_home jenkins/jenkins:lts
 
-    - name: Remove old Docker images
+    - name: Stop Existing Application
       shell: |
-        docker images --format "{{.Repository}}:{{.Tag}}" | grep -v "{{ project_name }}" | xargs -r docker rmi -f
-      ignore_errors: yes
+        docker stop the-final-project-guestbook-web || true
+        docker rm the-final-project-guestbook-web || true
 
-    - name: Pull the latest Docker image
-      shell: |
-        docker pull {{ docker_image }}
+    - name: Pull Latest Image
+      shell: docker pull ahmedelshandidy/the-final-project-guestbook-web:latest
 
-    - name: Run the final project container
-      shell: |
-        docker run -d --name {{ project_name }} -p {{ exposed_port }} {{ docker_image }}
-
-    - name: Ensure Jenkins container is running
-      shell: |
-        docker start jenkins || docker run -d --name jenkins -p 8080:8080 -v /var/jenkins_home jenkins/jenkins:lts
+    - name: Run Application on Port 5000
+      shell: >
+        docker run -d --name the-final-project-guestbook-web
+        -p 5000:5000
+        --restart=always
+        ahmedelshandidy/the-final-project-guestbook-web:latest
