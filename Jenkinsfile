@@ -6,16 +6,16 @@ pipeline {
         SONARQUBE_SERVER = "SonarQube"
         SONARQUBE_PROJECT_KEY = "final-guestbook"
         SONAR_HOST_URL = "http://16.170.182.27:9000"
-        BUILD_LOG_FILE = "build_output.log"
+        LOG_FILE = "build_output.log"  // Define log file name
     }
 
     stages {
         stage('Checkout Code') {
             steps {
                 script {
-                    sh 'rm -rf * || true'  
+                    sh 'rm -rf * || true'
                     checkout scm
-                    sh 'ls -la'
+                    sh 'ls -la | tee -a ${LOG_FILE}'
                 }
             }
         }
@@ -23,9 +23,11 @@ pipeline {
         stage('Verify Environment') {
             steps {
                 script {
-                    sh 'docker --version || echo "Docker not installed!"'
-                    sh 'docker-compose --version || echo "Docker Compose not found!"'
-                    sh 'sonar-scanner --version || echo "SonarScanner not installed!"'
+                    sh '''
+                    docker --version | tee -a ${LOG_FILE} || echo "Docker not installed!" | tee -a ${LOG_FILE}
+                    docker-compose --version | tee -a ${LOG_FILE} || echo "Docker Compose not found!" | tee -a ${LOG_FILE}
+                    sonar-scanner --version | tee -a ${LOG_FILE} || echo "SonarScanner not installed!" | tee -a ${LOG_FILE}
+                    '''
                 }
             }
         }
@@ -41,7 +43,8 @@ pipeline {
                           -Dsonar.host.url=${SONAR_HOST_URL} \
                           -Dsonar.login=$SONAR_TOKEN \
                           -Dsonar.qualitygate.wait=true \
-                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**"
+                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**" \
+                        | tee -a ${LOG_FILE}
                         '''
                     }
                 }
@@ -51,7 +54,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh "docker build -t ${DOCKER_IMAGE}:latest . > ${BUILD_LOG_FILE} 2>&1 || echo 'Docker build failed!'"
+                    sh "docker build -t ${DOCKER_IMAGE}:latest . | tee -a ${LOG_FILE}"
                 }
             }
         }
@@ -61,24 +64,11 @@ pipeline {
                 script {
                     sh '''
                     if [ -f docker-compose.yml ]; then
-                        docker-compose down || echo "Failed to stop running containers" >> ${BUILD_LOG_FILE}
-                        docker-compose up -d || echo "Failed to start containers" >> ${BUILD_LOG_FILE}
+                        docker-compose down | tee -a ${LOG_FILE} || echo "Failed to stop running containers" | tee -a ${LOG_FILE}
+                        docker-compose up -d | tee -a ${LOG_FILE} || echo "Failed to start containers" | tee -a ${LOG_FILE}
                     else
-                        echo "⚠️ No docker-compose.yml found!" >> ${BUILD_LOG_FILE}
+                        echo "⚠️ No docker-compose.yml found!" | tee -a ${LOG_FILE}
                     fi
-                    '''
-                }
-            }
-        }
-
-        stage('Ensure Jenkins and Project Containers Auto-Start') {
-            steps {
-                script {
-                    sh '''
-                    echo "Ensuring Jenkins container restarts on boot..."
-                    docker update --restart always jenkins || echo "Failed to update Jenkins container"
-                    echo "Ensuring project containers restart on boot..."
-                    docker update --restart always $(docker ps -q) || echo "Failed to update project containers"
                     '''
                 }
             }
@@ -86,6 +76,13 @@ pipeline {
     }
 
     post {
+        always {
+            script {
+                echo "📄 Build output log:"
+                sh "cat ${LOG_FILE}"
+            }
+            archiveArtifacts artifacts: 'build_output.log', fingerprint: true
+        }
         success {
             echo "✅ Deployment Successful!"
         }
