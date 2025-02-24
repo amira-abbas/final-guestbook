@@ -7,6 +7,8 @@ pipeline {
         SONAR_HOST_URL = "http://16.170.182.27:9000"
         DOCKER_HUB_USERNAME = "ahmedelshandidy"
         OUTPUT_LOG = "pipeline_output.log"
+        SLACK_CHANNEL = "#jenkins"  // Slack channel
+        SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/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' // Use your actual Webhook URL
     }
 
     stages {
@@ -144,12 +146,15 @@ pipeline {
     post {
         always {
             archiveArtifacts artifacts: 'pipeline_output.log', fingerprint: true
+            slackSend (channel: "${SLACK_CHANNEL}", message: "Jenkins Pipeline: Job completed. Logs attached.") // Send message after all stages
         }
         success {
             echo "✅ Deployment Successful!"
+            slackSend (channel: "${SLACK_CHANNEL}", message: "Jenkins Pipeline: Deployment Successful!") // Send success message
         }
         failure {
             echo "❌ Deployment Failed. Check logs!"
+            slackSend (channel: "${SLACK_CHANNEL}", message: "Jenkins Pipeline: Deployment Failed! Please check the logs.") // Send failure message
         }
     }
 }
