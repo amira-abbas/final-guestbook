@@ -1,13 +1,30 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKER_IMAGE = "final-guestbook"
+        SONARQUBE_SERVER = "SonarQube"
+        SONARQUBE_PROJECT_KEY = "final-guestbook"
+        SONAR_HOST_URL = "http://16.170.182.27:9000"
+    }
+
     stages {
-        stage('Check Dependencies') {
+        stage('Checkout Code') {
+            steps {
+                script {
+                    sh 'rm -rf * || true'  
+                    checkout scm
+                    sh 'ls -la'
+                }
+            }
+        }
+
+        stage('Verify Environment') {
             steps {
                 script {
                     sh 'docker --version || echo "Docker not installed!"'
                     sh 'docker-compose --version || echo "Docker Compose not found!"'
-                    sh 'mvn --version || echo "Maven not installed!"'
+                    sh 'sonar-scanner --version || echo "SonarScanner not installed!"'
                 }
             }
         }
@@ -15,18 +32,16 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    withSonarQubeEnv('SONARQUBE_SERVER') {
-                        withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-                            sh '''
-                            sonar-scanner \
-                              -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
-                              -Dsonar.sources=. \
-                              -Dsonar.host.url=${SONAR_HOST_URL} \
-                              -Dsonar.login=$SONAR_TOKEN \
-                              -Dsonar.qualitygate.wait=false \
-                              -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**"
-                            '''
-                        }
+                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                        sh '''
+                        sonar-scanner \
+                          -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
+                          -Dsonar.sources=. \
+                          -Dsonar.host.url=${SONAR_HOST_URL} \
+                          -Dsonar.login=$SONAR_TOKEN \
+                          -Dsonar.qualitygate.wait=true \
+                          -Dsonar.exclusions="**/node_modules/**,**/tests/**,**/*.log,**/bin/**,**/out/**"
+                        '''
                     }
                 }
             }
